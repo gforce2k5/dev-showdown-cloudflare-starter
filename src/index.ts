@@ -1,5 +1,5 @@
 import { createOpenAICompatible, } from '@ai-sdk/openai-compatible';
-import { generateObject, generateText, tool, stepCountIs } from 'ai';
+import { generateObject, generateText, streamText, tool, stepCountIs } from 'ai';
 import { z } from 'zod';
 
 const INTERACTION_ID_HEADER = 'X-Interaction-Id';
@@ -140,6 +140,44 @@ export default {
 
 				return Response.json({
 					answer: result.text || 'N/A',
+				});
+			}
+			case 'RESPONSE_STREAMING': {
+				if (!env.DEV_SHOWDOWN_API_KEY) {
+					throw new Error('DEV_SHOWDOWN_API_KEY is required');
+				}
+
+				const workshopLlm = createWorkshopLlm(env.DEV_SHOWDOWN_API_KEY, interactionId);
+				const result = streamText({
+					model: workshopLlm.chatModel('deli-4'),
+					prompt: payload.prompt,
+				});
+
+				const encoder = new TextEncoder();
+				const textStream = result.textStream;
+				const body = new ReadableStream<Uint8Array>({
+					async start(controller) {
+						try {
+							controller.enqueue(encoder.encode('"'));
+							for await (const chunk of textStream) {
+								if (!chunk) continue;
+								const escaped = JSON.stringify(chunk).slice(1, -1);
+								controller.enqueue(encoder.encode(escaped));
+							}
+							controller.enqueue(encoder.encode('"'));
+							controller.close();
+						} catch (err) {
+							controller.error(err);
+						}
+					},
+				});
+
+				return new Response(body, {
+					headers: {
+						'Content-Type': 'application/json; charset=utf-8',
+						'Transfer-Encoding': 'chunked',
+						'Cache-Control': 'no-cache, no-transform',
+					},
 				});
 			}
 			default:
