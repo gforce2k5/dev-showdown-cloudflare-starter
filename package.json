@@ -1,0 +1,24 @@
+{
+	"name": "dev-showdown-cloudflare-starter",
+	"version": "0.0.0",
+	"private": true,
+	"scripts": {
+		"deploy": "wrangler deploy",
+		"dev": "wrangler dev",
+		"start": "wrangler dev",
+		"test": "vitest",
+		"cf-typegen": "wrangler types"
+	},
+	"dependencies": {
+		"@ai-sdk/openai-compatible": "^2.0.41",
+		"ai": "^6.0.116",
+		"zod": "^4.1.11"
+	},
+	"devDependencies": {
+		"@cloudflare/vitest-pool-workers": "^0.12.4",
+		"@types/node": "^25.5.2",
+		"typescript": "^5.5.2",
+		"vitest": "~3.2.0",
+		"wrangler": "^4.81.1"
+	}
+}
