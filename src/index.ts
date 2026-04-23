@@ -153,28 +153,9 @@ export default {
 					prompt: payload.prompt,
 				});
 
-				const encoder = new TextEncoder();
-				const textStream = result.textStream;
-				const body = new ReadableStream<Uint8Array>({
-					async start(controller) {
-						try {
-							controller.enqueue(encoder.encode('"'));
-							for await (const chunk of textStream) {
-								if (!chunk) continue;
-								const escaped = JSON.stringify(chunk).slice(1, -1);
-								controller.enqueue(encoder.encode(escaped));
-							}
-							controller.enqueue(encoder.encode('"'));
-							controller.close();
-						} catch (err) {
-							controller.error(err);
-						}
-					},
-				});
-
-				return new Response(body, {
+				return new Response(result.textStream.pipeThrough(new TextEncoderStream()), {
 					headers: {
-						'Content-Type': 'application/json; charset=utf-8',
+						'Content-Type': 'text/plain; charset=utf-8',
 						'Transfer-Encoding': 'chunked',
 						'Cache-Control': 'no-cache, no-transform',
 					},
