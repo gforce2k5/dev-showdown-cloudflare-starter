@@ -1,5 +1,5 @@
-import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
-import { generateObject, generateText } from 'ai';
+import { createOpenAICompatible, } from '@ai-sdk/openai-compatible';
+import { generateObject, generateText, tool, stepCountIs } from 'ai';
 import { z } from 'zod';
 
 const INTERACTION_ID_HEADER = 'X-Interaction-Id';
@@ -102,8 +102,48 @@ export default {
 
 				return Response.json(result.object);
 			}
-				default:
-					return new Response('Solver not found', { status: 404 });
+			case 'BASIC_TOOL_CALL': {
+				if (!env.DEV_SHOWDOWN_API_KEY) {
+					throw new Error('DEV_SHOWDOWN_API_KEY is required');
+				}
+
+				const workshopLlm = createWorkshopLlm(env.DEV_SHOWDOWN_API_KEY, interactionId);
+				const result = await generateText({
+					model: workshopLlm.chatModel('deli-4'),
+					system:
+						'You are a helpful weather assistant. When the user asks about the weather in a city, use the get_weather tool to fetch the current weather, then respond in natural language and include the temperature returned by the tool.',
+					prompt: payload.question,
+					tools: {
+						get_weather: tool({
+							description: 'Get the current weather for a given city.',
+							inputSchema: z.object({
+								city: z.string().describe('The name of the city to get the weather for.'),
+							}),
+							execute: async ({ city }) => {
+								const response = await fetch('https://devshowdown.com/api/weather', {
+									method: 'POST',
+									headers: {
+										'Content-Type': 'application/json',
+										[INTERACTION_ID_HEADER]: interactionId,
+									},
+									body: JSON.stringify({ city }),
+								});
+								if (!response.ok) {
+									throw new Error(`Weather API error: ${response.status}`);
+								}
+								return await response.json();
+							},
+						}),
+					},
+					stopWhen: stepCountIs(5),
+				});
+
+				return Response.json({
+					answer: result.text || 'N/A',
+				});
+			}
+			default:
+				return new Response('Solver not found', { status: 404 });
 			}
 	},
 	} satisfies ExportedHandler<Env>;
